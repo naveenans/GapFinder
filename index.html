@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gap/One — NSE·BSE Arbitrage</title>
+<style>
+  :root{
+    --bg:#0A1018;
+    --panel:#101826;
+    --panel-2:#0D1420;
+    --line: rgba(255,255,255,0.08);
+    --text:#E8ECF1;
+    --text-dim:#8592A6;
+    --nse:#3FC6E8;
+    --bse:#F5A623;
+    --gap-hi:#2BD9A8;
+    --gap-warn:#FF6B5E;
+    --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+    --display: 'Fraunces', Georgia, serif;
+    --body: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--text); font-family:var(--body); -webkit-font-smoothing:antialiased;}
+  body{padding-bottom:60px;}
+  .wrap{max-width:480px; margin:0 auto; padding:18px 16px 0;}
+
+  .hdr{display:flex; align-items:baseline; justify-content:space-between; padding:6px 2px 16px;}
+  .hdr h1{font-family:var(--display); font-size:22px; font-weight:600; letter-spacing:-0.01em;}
+  .hdr h1 span{color:var(--gap-hi);}
+  .hdr .clock{font-family:var(--mono); font-size:11px; color:var(--text-dim); text-align:right;}
+  .mkt-dot{display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:5px; position:relative; top:-1px;}
+  .mkt-open{background:var(--gap-hi); box-shadow:0 0 6px var(--gap-hi);}
+  .mkt-closed{background:var(--text-dim);}
+
+  .hero{
+    background: linear-gradient(160deg, var(--panel) 0%, var(--panel-2) 100%);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:20px;
+    margin-bottom:16px;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero-label{font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:10px;}
+  .hero-empty{font-size:14px; color:var(--text-dim); line-height:1.5; padding:10px 0;}
+  .hero-name{font-family:var(--display); font-size:26px; font-weight:600; margin-bottom:2px;}
+  .hero-sym{font-family:var(--mono); font-size:12px; color:var(--text-dim); margin-bottom:16px;}
+
+  .gauge{position:relative; height:52px; margin-bottom:14px;}
+  .gauge-track{position:absolute; top:24px; left:0; right:0; height:2px; background:var(--line);}
+  .gauge-pt{position:absolute; top:14px; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:8px; font-weight:700;}
+  .gauge-nse{background:var(--nse); color:#00232B;}
+  .gauge-bse{background:var(--bse); color:#2B1900;}
+  .gauge-line{position:absolute; top:24px; height:2px; background:linear-gradient(90deg, var(--nse), var(--bse));}
+  .gauge-fig{position:absolute; top:0; font-family:var(--mono); font-size:11px; white-space:nowrap;}
+
+  .hero-stats{display:flex; gap:10px; margin-bottom:14px;}
+  .stat{flex:1; background:rgba(255,255,255,0.03); border:1px solid var(--line); border-radius:10px; padding:10px 12px;}
+  .stat-k{font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;}
+  .stat-v{font-family:var(--mono); font-size:16px; font-weight:600;}
+  .stat-v.hi{color:var(--gap-hi);}
+
+  .hero-action{font-size:13px; line-height:1.5; color:var(--text); background:rgba(43,217,168,0.08); border:1px solid rgba(43,217,168,0.25); border-radius:10px; padding:12px 14px;}
+  .hero-action b{color:var(--gap-hi);}
+
+  .sec-title{display:flex; justify-content:space-between; align-items:center; margin:22px 2px 10px;}
+  .sec-title h2{font-family:var(--display); font-size:15px; font-weight:600; color:var(--text);}
+  .sec-title .cnt{font-family:var(--mono); font-size:11px; color:var(--text-dim);}
+
+  .row{
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin-bottom:8px;
+  }
+  .row.top{border-color:rgba(43,217,168,0.35); background:linear-gradient(160deg, rgba(43,217,168,0.07), var(--panel));}
+  .row-rank{font-family:var(--mono); font-size:11px; color:var(--text-dim); width:16px;}
+  .row-main{flex:1; min-width:0;}
+  .row-name{font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .row-px{font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-top:2px;}
+  .row-px .nse-c{color:var(--nse);}
+  .row-px .bse-c{color:var(--bse);}
+  .row-gap{text-align:right; font-family:var(--mono); font-size:15px; font-weight:700;}
+  .row-gap.warn{color:var(--gap-warn);}
+  .row-gap.hi{color:var(--gap-hi);}
+
+  .empty-state{
+    border:1px dashed var(--line); border-radius:14px; padding:28px 20px; text-align:center;
+    color:var(--text-dim); font-size:13px; line-height:1.6;
+  }
+
+  details{background:var(--panel); border:1px solid var(--line); border-radius:14px; margin-top:14px; overflow:hidden;}
+  summary{padding:14px 16px; font-size:13px; font-weight:600; cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;}
+  summary::-webkit-details-marker{display:none;}
+  summary::after{content:'⌄'; color:var(--text-dim); transition:transform 0.2s;}
+  details[open] summary::after{transform:rotate(180deg);}
+  .settings-body{padding:0 16px 16px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:11px; color:var(--text-dim); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.06em;}
+  .field input, .field select{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:13px;
+  }
+  .field input:focus, .field select:focus{outline:none; border-color:var(--nse);}
+  .field-hint{font-size:11px; color:var(--text-dim); margin-top:5px; line-height:1.4;}
+  .btn{
+    width:100%; background:var(--nse); color:#00232B; border:none; border-radius:10px;
+    padding:12px; font-size:13px; font-weight:700; cursor:pointer; font-family:var(--body);
+  }
+  .btn:active{opacity:0.8;}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--text);}
+  .btn-row{display:flex; gap:8px;}
+  .btn-row .btn{flex:1;}
+  .status-msg{font-size:12px; padding:10px 12px; border-radius:8px; margin-top:10px; line-height:1.5;}
+  .status-err{background:rgba(255,107,94,0.1); border:1px solid rgba(255,107,94,0.3); color:#FFAFA6;}
+  .status-ok{background:rgba(43,217,168,0.1); border:1px solid rgba(43,217,168,0.3); color:var(--gap-hi);}
+  .conn-pill{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-family:var(--mono); padding:5px 10px; border-radius:20px; background:rgba(255,255,255,0.04); border:1px solid var(--line); color:var(--text-dim);}
+  .conn-pill.on{color:var(--gap-hi); border-color:rgba(43,217,168,0.3);}
+  .conn-pill .dot{width:6px; height:6px; border-radius:50%; background:currentColor;}
+
+  .refresh-bar{display:flex; gap:8px; margin-top:14px;}
+  .refresh-bar .btn{flex:1;}
+
+  .foot-note{font-size:11px; color:var(--text-dim); text-align:center; margin-top:24px; line-height:1.6; padding:0 10px;}
+
+  ::-webkit-scrollbar{width:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <h1>Gap<span>/</span>One</h1>
+    <div class="clock">
+      <div><span class="mkt-dot" id="mktDot"></span><span id="mktStatus">checking…</span></div>
+      <div id="clockTime">--:--:--</div>
+    </div>
+  </div>
+
+  <div class="hero" id="heroCard">
+    <div class="hero-label">Today's One Trade</div>
+    <div class="hero-empty">Connect your Fyers account below, then fetch live quotes — or paste in NSE/BSE prices manually. I'll rank the gaps and pick the day's trade.</div>
+  </div>
+
+  <div class="sec-title">
+    <h2>Ranked gaps</h2>
+    <div class="cnt" id="rankedCount">0 pairs</div>
+  </div>
+  <div id="rankedList">
+    <div class="empty-state">No data yet. Fetch live quotes or enter prices manually to see the ranked list.</div>
+  </div>
+
+  <div class="refresh-bar">
+    <button class="btn" id="fetchBtn">Fetch live quotes</button>
+    <button class="btn btn-ghost" id="manualBtn">Manual entry</button>
+  </div>
+  <div id="fetchStatus"></div>
+
+  <details id="connPanel" open>
+    <summary>Fyers connection <span class="conn-pill" id="connPill"><span class="dot"></span><span id="connPillText">not connected</span></span></summary>
+    <div class="settings-body">
+      <div class="field">
+        <label>Client ID (app_id)</label>
+        <input type="text" id="clientId" placeholder="e.g. ABC123-100">
+      </div>
+      <div class="field">
+        <label>Secret Key</label>
+        <input type="password" id="secretKey" placeholder="Your Fyers app secret">
+        <div class="field-hint">Used only in your browser to compute the OAuth handshake hash. Stored locally on this device via the app's own storage — never sent to me or anywhere but Fyers' servers.</div>
+      </div>
+      <div class="field">
+        <label>Redirect URI</label>
+        <input type="text" id="redirectUri" placeholder="https://your-redirect-url">
+        <div class="field-hint">Must exactly match the Redirect URL registered on your Fyers app dashboard. If this page isn't hosted at that URL, that's fine — see the paste-code step below.</div>
+      </div>
+
+      <div class="btn-row" style="margin-bottom:12px;">
+        <button class="btn" id="loginBtn">Login with Fyers</button>
+      </div>
+
+      <div class="field">
+        <label>Auth code (auto-fills if redirected back here)</label>
+        <input type="text" id="authCode" placeholder="Paste auth_code from the redirect URL">
+        <div class="field-hint">After logging in, Fyers redirects to your Redirect URI with <code>?auth_code=...</code> in the address bar. If that page isn't this one, copy the code from the URL and paste it here.</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="exchangeBtn">Exchange for access token</button>
+      </div>
+      <div id="oauthStatus"></div>
+
+      <details style="margin-top:14px; border-color:var(--line);">
+        <summary style="font-size:12px;">Already have an access token?</summary>
+        <div class="settings-body">
+          <div class="field">
+            <label>Paste access token directly</label>
+            <input type="password" id="accessTokenManual" placeholder="Skip login, paste token">
+          </div>
+          <button class="btn btn-ghost" id="useManualTokenBtn">Use this token</button>
+        </div>
+      </details>
+
+      <div class="field" style="margin-top:14px;">
+        <label>Alert threshold (%)</label>
+        <input type="text" id="threshold" value="0.5">
+        <div class="field-hint">Flag the top gap in amber if it's below this — otherwise it shows green.</div>
+      </div>
+      <button class="btn btn-ghost" id="saveSettingsBtn">Save connection & threshold</button>
+    </div>
+  </details>
+
+  <div class="foot-note">
+    Alerts only — no orders are placed automatically. Access tokens expire daily per Fyers policy; you'll log in again each morning. Prices may lag live market data; confirm depth and price on your broker terminal before placing any trade.
+  </div>
+</div>
+
+<script>
+const DEFAULT_UNIVERSE = [
+  {name:"Reliance Industries", nse:"NSE:RELIANCE-EQ", bse:"BSE:RELIANCE-A"},
+  {name:"TCS", nse:"NSE:TCS-EQ", bse:"BSE:TCS-A"},
+  {name:"HDFC Bank", nse:"NSE:HDFCBANK-EQ", bse:"BSE:HDFCBANK-A"},
+  {name:"ICICI Bank", nse:"NSE:ICICIBANK-EQ", bse:"BSE:ICICIBANK-A"},
+  {name:"Infosys", nse:"NSE:INFY-EQ", bse:"BSE:INFY-A"},
+  {name:"State Bank of India", nse:"NSE:SBIN-EQ", bse:"BSE:SBIN-A"},
+  {name:"ITC", nse:"NSE:ITC-EQ", bse:"BSE:ITC-A"},
+  {name:"Larsen & Toubro", nse:"NSE:LT-EQ", bse:"BSE:LT-A"},
+  {name:"Bajaj Finance", nse:"NSE:BAJFINANCE-EQ", bse:"BSE:BAJFINANCE-A"},
+  {name:"Axis Bank", nse:"NSE:AXISBANK-EQ", bse:"BSE:AXISBANK-A"},
+  {name:"Kotak Mahindra Bank", nse:"NSE:KOTAKBANK-EQ", bse:"BSE:KOTAKBANK-A"},
+  {name:"Mahindra & Mahindra", nse:"NSE:M&M-EQ", bse:"BSE:M&M-A"},
+  {name:"Titan Company", nse:"NSE:TITAN-EQ", bse:"BSE:TITAN-A"},
+  {name:"Asian Paints", nse:"NSE:ASIANPAINT-EQ", bse:"BSE:ASIANPAINT-A"},
+  {name:"Nestle India", nse:"NSE:NESTLEIND-EQ", bse:"BSE:NESTLEIND-A"},
+  {name:"Hindustan Unilever", nse:"NSE:HINDUNILVR-EQ", bse:"BSE:HINDUNILVR-A"},
+  {name:"Sun Pharma", nse:"NSE:SUNPHARMA-EQ", bse:"BSE:SUNPHARMA-A"},
+  {name:"Wipro", nse:"NSE:WIPRO-EQ", bse:"BSE:WIPRO-A"},
+  {name:"Tata Motors", nse:"NSE:TATAMOTORS-EQ", bse:"BSE:TATAMOTORS-A"},
+  {name:"Tata Steel", nse:"NSE:TATASTEEL-EQ", bse:"BSE:TATASTEEL-A"},
+  {name:"JSW Steel", nse:"NSE:JSWSTEEL-EQ", bse:"BSE:JSWSTEEL-A"},
+  {name:"Coal India", nse:"NSE:COALINDIA-EQ", bse:"BSE:COALINDIA-A"},
+  {name:"ONGC", nse:"NSE:ONGC-EQ", bse:"BSE:ONGC-A"},
+  {name:"NTPC", nse:"NSE:NTPC-EQ", bse:"BSE:NTPC-A"},
+  {name:"Power Grid Corp", nse:"NSE:POWERGRID-EQ", bse:"BSE:POWERGRID-A"},
+  {name:"UltraTech Cement", nse:"NSE:ULTRACEMCO-EQ", bse:"BSE:ULTRACEMCO-A"},
+  {name:"Grasim Industries", nse:"NSE:GRASIM-EQ", bse:"BSE:GRASIM-A"},
+  {name:"Britannia Industries", nse:"NSE:BRITANNIA-EQ", bse:"BSE:BRITANNIA-A"},
+  {name:"Dr Reddy's Labs", nse:"NSE:DRREDDY-EQ", bse:"BSE:DRREDDY-A"},
+  {name:"Cipla", nse:"NSE:CIPLA-EQ", bse:"BSE:CIPLA-A"},
+  {name:"Eicher Motors", nse:"NSE:EICHERMOT-EQ", bse:"BSE:EICHERMOT-A"},
+  {name:"Hero MotoCorp", nse:"NSE:HEROMOTOCO-EQ", bse:"BSE:HEROMOTOCO-A"},
+  {name:"Bajaj Auto", nse:"NSE:BAJAJ-AUTO-EQ", bse:"BSE:BAJAJ-AUTO-A"},
+  {name:"Hindalco Industries", nse:"NSE:HINDALCO-EQ", bse:"BSE:HINDALCO-A"},
+  {name:"Vedanta", nse:"NSE:VEDL-EQ", bse:"BSE:VEDL-A"},
+  {name:"Tech Mahindra", nse:"NSE:TECHM-EQ", bse:"BSE:TECHM-A"},
+  {name:"HCL Technologies", nse:"NSE:HCLTECH-EQ", bse:"BSE:HCLTECH-A"},
+  {name:"Adani Ports", nse:"NSE:ADANIPORTS-EQ", bse:"BSE:ADANIPORTS-A"},
+  {name:"Bharti Airtel", nse:"NSE:BHARTIARTL-EQ", bse:"BSE:BHARTIARTL-A"}
+];
+
+let universe = DEFAULT_UNIVERSE.map(s => ({...s, nsePx:null, bsePx:null}));
+let threshold = 0.5;
+let sessionAccessToken = null;
+
+// ---------- Storage ----------
+async function loadSettings(){
+  try{
+    const r = await window.storage.get('arb-settings', false);
+    if(r && r.value){
+      const s = JSON.parse(r.value);
+      if(s.threshold) { threshold = s.threshold; document.getElementById('threshold').value = s.threshold; }
+      if(s.clientId) document.getElementById('clientId').value = s.clientId;
+      if(s.secretKey) document.getElementById('secretKey').value = s.secretKey;
+      if(s.redirectUri) document.getElementById('redirectUri').value = s.redirectUri;
+    }
+  }catch(e){ /* nothing saved yet */ }
+  if(!document.getElementById('redirectUri').value){
+    document.getElementById('redirectUri').value = window.location.origin + window.location.pathname;
+  }
+}
+async function saveSettings(){
+  threshold = parseFloat(document.getElementById('threshold').value) || 0.5;
+  const cfg = {
+    threshold,
+    clientId: document.getElementById('clientId').value.trim(),
+    secretKey: document.getElementById('secretKey').value.trim(),
+    redirectUri: document.getElementById('redirectUri').value.trim()
+  };
+  try{
+    await window.storage.set('arb-settings', JSON.stringify(cfg), false);
+    showStatus('fetchStatus', 'Connection details & threshold saved on this device.', 'ok');
+  }catch(e){
+    showStatus('fetchStatus', 'Could not save settings — continuing without persistence.', 'err');
+  }
+}
+
+// ---------- Clock / market hours (IST) ----------
+function updateClock(){
+  const now = new Date();
+  const ist = new Date(now.toLocaleString('en-US', {timeZone:'Asia/Kolkata'}));
+  const h = ist.getHours(), m = ist.getMinutes(), s = ist.getSeconds();
+  document.getElementById('clockTime').textContent =
+    String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+' IST';
+  const day = ist.getDay();
+  const mins = h*60+m;
+  const open = day>=1 && day<=5 && mins>=555 && mins<=930;
+  document.getElementById('mktDot').className = 'mkt-dot ' + (open?'mkt-open':'mkt-closed');
+  document.getElementById('mktStatus').textContent = open ? 'market open' : 'market closed';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function showStatus(elId, msg, type){
+  document.getElementById(elId).innerHTML = `<div class="status-msg status-${type}">${msg}</div>`;
+}
+
+function setConnPill(on, text){
+  const pill = document.getElementById('connPill');
+  pill.className = 'conn-pill' + (on ? ' on' : '');
+  document.getElementById('connPillText').textContent = text;
+}
+
+// ---------- OAuth: login ----------
+function loginWithFyers(){
+  const clientId = document.getElementById('clientId').value.trim();
+  const redirectUri = document.getElementById('redirectUri').value.trim();
+  if(!clientId || !redirectUri){
+    showStatus('oauthStatus', 'Enter Client ID and Redirect URI first.', 'err');
+    return;
+  }
+  const state = 'gapone_' + Date.now();
+  const authUrl = `https://api-t1.fyers.in/api/v3/generate-authcode?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`;
+  window.open(authUrl, '_blank');
+  showStatus('oauthStatus', 'Opened Fyers login in a new tab. After approving, you\'ll land on your Redirect URI with an auth_code — paste it below (it auto-fills if that page is this one).', 'ok');
+}
+
+// ---------- SHA-256 hex via Web Crypto ----------
+async function sha256Hex(message){
+  const enc = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ---------- OAuth: exchange auth_code for access_token ----------
+async function exchangeAuthCode(){
+  const clientId = document.getElementById('clientId').value.trim();
+  const secretKey = document.getElementById('secretKey').value.trim();
+  const authCode = document.getElementById('authCode').value.trim();
+  if(!clientId || !secretKey || !authCode){
+    showStatus('oauthStatus', 'Client ID, Secret Key, and Auth Code are all needed to exchange for a token.', 'err');
+    return;
+  }
+  showStatus('oauthStatus', 'Exchanging code for access token…', 'ok');
+  try{
+    const appIdHash = await sha256Hex(`${clientId}:${secretKey}`);
+    const res = await fetch('https://api-t1.fyers.in/api/v3/validate-authcode', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ grant_type:'authorization_code', appIdHash, code: authCode })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.access_token) throw new Error(data.message || ('HTTP ' + res.status));
+    sessionAccessToken = data.access_token;
+    setConnPill(true, 'connected');
+    showStatus('oauthStatus', 'Connected — access token active for this session.', 'ok');
+  }catch(err){
+    setConnPill(false, 'not connected');
+    showStatus('oauthStatus', `Exchange failed (${err.message}). Double-check the Redirect URI matches your Fyers app exactly, and that the auth code hasn't already been used (each code works once).`, 'err');
+  }
+}
+
+function useManualToken(){
+  const token = document.getElementById('accessTokenManual').value.trim();
+  if(!token){
+    showStatus('oauthStatus', 'Paste a token first.', 'err');
+    return;
+  }
+  sessionAccessToken = token;
+  setConnPill(true, 'connected (manual token)');
+  showStatus('oauthStatus', 'Using the manually pasted access token for this session.', 'ok');
+}
+
+// ---------- Auto-capture auth_code if this page IS the redirect target ----------
+function checkForRedirectCode(){
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('auth_code');
+  if(code){
+    document.getElementById('authCode').value = code;
+    document.getElementById('connPanel').open = true;
+    showStatus('oauthStatus', 'Auth code captured from the redirect. Confirm your Secret Key below, then exchange it for a token.', 'ok');
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+}
+
+// ---------- Fetch live quotes from Fyers ----------
+async function fetchLiveQuotes(){
+  const clientId = document.getElementById('clientId').value.trim();
+  if(!sessionAccessToken || !clientId){
+    showStatus('fetchStatus', 'Connect to Fyers first (Login with Fyers, or paste a token) in the panel below.', 'err');
+    document.getElementById('connPanel').open = true;
+    return;
+  }
+  showStatus('fetchStatus', 'Fetching quotes…', 'ok');
+
+  const symbols = universe.flatMap(s => [s.nse, s.bse]).join(',');
+  const url = `https://api-t1.fyers.in/data/quotes?symbols=${encodeURIComponent(symbols)}`;
+
+  try{
+    const res = await fetch(url, {
+      method:'GET',
+      headers:{ 'Authorization': `${clientId}:${sessionAccessToken}` }
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if(!data.d) throw new Error('Unexpected response shape');
+
+    const priceMap = {};
+    data.d.forEach(item => {
+      if(item.n && item.v && item.v.lp) priceMap[item.n] = item.v.lp;
+    });
+    universe = universe.map(s => ({...s, nsePx: priceMap[s.nse] ?? null, bsePx: priceMap[s.bse] ?? null}));
+
+    render();
+    showStatus('fetchStatus', 'Live quotes updated.', 'ok');
+  }catch(err){
+    showStatus('fetchStatus',
+      `Fetch failed (${err.message}). Fyers may be blocking direct browser calls (CORS), or the token expired. Use "Manual entry" below to paste today's NSE/BSE prices instead.`,
+      'err');
+  }
+}
+
+// ---------- Manual entry mode ----------
+function manualEntry(){
+  const list = document.getElementById('rankedList');
+  let rows = universe.map((s,i) => `
+    <div class="field" style="display:flex; gap:8px; align-items:flex-end; margin-bottom:8px;">
+      <div style="flex:2;"><label>${s.name}</label><input readonly value="NSE / BSE" style="opacity:0.5;"></div>
+      <div style="flex:1;"><input type="number" step="0.05" placeholder="NSE ₹" id="m_nse_${i}" value="${s.nsePx ?? ''}"></div>
+      <div style="flex:1;"><input type="number" step="0.05" placeholder="BSE ₹" id="m_bse_${i}" value="${s.bsePx ?? ''}"></div>
+    </div>`).join('');
+  list.innerHTML = `<div class="settings-body" style="padding:14px 0;">${rows}
+    <button class="btn" id="applyManualBtn" style="margin-top:8px;">Rank these prices</button>
+  </div>`;
+  document.getElementById('applyManualBtn').onclick = () => {
+    universe = universe.map((s,i) => {
+      const nse = parseFloat(document.getElementById(`m_nse_${i}`).value);
+      const bse = parseFloat(document.getElementById(`m_bse_${i}`).value);
+      return {...s, nsePx: isNaN(nse)?null:nse, bsePx: isNaN(bse)?null:bse};
+    });
+    render();
+  };
+}
+
+// ---------- Render ranked list + hero ----------
+function render(){
+  threshold = parseFloat(document.getElementById('threshold').value) || threshold;
+
+  const withData = universe
+    .filter(s => s.nsePx && s.bsePx)
+    .map(s => {
+      const hi = Math.max(s.nsePx, s.bsePx);
+      const lo = Math.min(s.nsePx, s.bsePx);
+      const gapPct = ((hi-lo)/lo)*100;
+      const buyOn = s.nsePx < s.bsePx ? 'NSE' : 'BSE';
+      const sellOn = buyOn === 'NSE' ? 'BSE' : 'NSE';
+      return {...s, gapPct, buyOn, sellOn, hi, lo};
+    })
+    .sort((a,b) => b.gapPct - a.gapPct);
+
+  document.getElementById('rankedCount').textContent = withData.length + ' pairs';
+
+  if(withData.length === 0){
+    document.getElementById('rankedList').innerHTML =
+      '<div class="empty-state">No data yet. Fetch live quotes or enter prices manually to see the ranked list.</div>';
+    document.getElementById('heroCard').innerHTML =
+      '<div class="hero-label">Today\'s One Trade</div><div class="hero-empty">Waiting on price data — fetch live quotes or use manual entry.</div>';
+    return;
+  }
+
+  const top = withData[0];
+  const isHi = top.gapPct >= threshold;
+  document.getElementById('heroCard').innerHTML = `
+    <div class="hero-label">Today's One Trade</div>
+    <div class="hero-name">${top.name}</div>
+    <div class="hero-sym">${top.nse.split(':')[1]} · dual-listed</div>
+    <div class="gauge">
+      <div class="gauge-track"></div>
+      <div class="gauge-fig" style="left:0;">₹${top.nsePx.toFixed(2)}</div>
+      <div class="gauge-fig" style="right:0;">₹${top.bsePx.toFixed(2)}</div>
+      <div class="gauge-pt gauge-nse" style="left:0;">NSE</div>
+      <div class="gauge-pt gauge-bse" style="right:0;">BSE</div>
+      <div class="gauge-line" style="left:22px; right:22px;"></div>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><div class="stat-k">Spread</div><div class="stat-v ${isHi?'hi':''}">${top.gapPct.toFixed(3)}%</div></div>
+      <div class="stat"><div class="stat-k">Buy on</div><div class="stat-v">${top.buyOn}</div></div>
+      <div class="stat"><div class="stat-k">Sell on</div><div class="stat-v">${top.sellOn}</div></div>
+    </div>
+    <div class="hero-action"><b>Buy ${top.name} on ${top.buyOn} @ ₹${top.lo.toFixed(2)}</b>, sell on ${top.sellOn} @ ₹${top.hi.toFixed(2)} — a ${top.gapPct.toFixed(3)}% gap. Verify live depth on your terminal before placing.</div>
+  `;
+
+  document.getElementById('rankedList').innerHTML = withData.map((s,i) => `
+    <div class="row ${i===0?'top':''}">
+      <div class="row-rank">${i+1}</div>
+      <div class="row-main">
+        <div class="row-name">${s.name}</div>
+        <div class="row-px"><span class="nse-c">NSE ₹${s.nsePx.toFixed(2)}</span> &nbsp;·&nbsp; <span class="bse-c">BSE ₹${s.bsePx.toFixed(2)}</span></div>
+      </div>
+      <div class="row-gap ${s.gapPct>=threshold?'hi':'warn'}">${s.gapPct.toFixed(2)}%</div>
+    </div>
+  `).join('');
+}
+
+// ---------- Wire up ----------
+document.getElementById('fetchBtn').onclick = fetchLiveQuotes;
+document.getElementById('manualBtn').onclick = manualEntry;
+document.getElementById('saveSettingsBtn').onclick = saveSettings;
+document.getElementById('loginBtn').onclick = loginWithFyers;
+document.getElementById('exchangeBtn').onclick = exchangeAuthCode;
+document.getElementById('useManualTokenBtn').onclick = useManualToken;
+
+loadSettings().then(checkForRedirectCode);
+</script>
+</body>
+</html>
