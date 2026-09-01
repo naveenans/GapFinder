@@ -1,0 +1,28 @@
+name: Ola Battery Alert APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [ ola-battery-alert ]
+    paths:
+      - 'ola-battery-alert/**'
+      - '.github/workflows/ola-battery-alert-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        working-directory: ola-battery-alert
+        run: gradle :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OlaBatteryAlert-debug-apk
+          path: ola-battery-alert/app/build/outputs/apk/debug/app-debug.apk
