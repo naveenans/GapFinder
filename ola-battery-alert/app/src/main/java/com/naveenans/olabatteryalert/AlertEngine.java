@@ -1,0 +1,8 @@
+package com.naveenans.olabatteryalert;
+import android.app.*; import android.content.*; import android.os.Build;
+public final class AlertEngine {
+ public static final String ALERT="charge_limit", MONITOR="monitor"; private AlertEngine(){}
+ public static void channels(Context c){ if(Build.VERSION.SDK_INT>=26){NotificationManager n=c.getSystemService(NotificationManager.class); NotificationChannel a=new NotificationChannel(ALERT,"Charge limit alerts",NotificationManager.IMPORTANCE_HIGH); a.enableVibration(true); n.createNotificationChannel(a); n.createNotificationChannel(new NotificationChannel(MONITOR,"Widget monitor",NotificationManager.IMPORTANCE_LOW));}}
+ public static void process(Context c,int pct,String source){SharedPreferences p=c.getSharedPreferences("prefs",0); int limit=p.getInt("limit",80),last=p.getInt("last_pct",-1); p.edit().putInt("last_pct",pct).putLong("last_update",System.currentTimeMillis()).putString("last_source",source).apply(); if(pct>=limit&&last<limit)send(c,pct,limit,source);}
+ public static void send(Context c,int pct,int limit,String source){channels(c); PendingIntent pi=PendingIntent.getActivity(c,11,new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE); Notification n=new Notification.Builder(c,ALERT).setSmallIcon(android.R.drawable.ic_lock_idle_charging).setContentTitle("Ola charge limit reached: "+pct+"%").setContentText("Selected "+limit+"% limit reached. Source: "+source).setCategory(Notification.CATEGORY_ALARM).setPriority(Notification.PRIORITY_MAX).setDefaults(Notification.DEFAULT_ALL).setContentIntent(pi).setAutoCancel(true).build(); c.getSystemService(NotificationManager.class).notify(8080,n);}
+}
